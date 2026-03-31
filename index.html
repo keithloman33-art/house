@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v18.0</title>
+    <title>工程量度 App v19.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
@@ -11,29 +11,19 @@
         html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: #000; color: white; }
         body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
 
-        #version-tag { position: absolute; top: 10px; left: 10px; font-size: 10px; color: #666; z-index: 5; }
-        
         /* 頂部數據看板 */
-        #data-display { 
-            background: rgba(0, 0, 0, 0.8); 
-            padding: 15px 10px; 
-            display: flex; 
-            justify-content: space-around; 
-            border-bottom: 1px solid #444;
-            z-index: 10;
-        }
-        .data-box { text-align: center; flex: 1; }
-        .data-label { font-size: 11px; color: #aaa; margin-bottom: 4px; display: block; }
-        .data-num { font-family: 'Courier New', monospace; font-size: 18px; color: var(--accent); font-weight: bold; }
+        #data-display { background: rgba(0, 0, 0, 0.9); padding: 15px 10px; display: flex; border-bottom: 1px solid #444; z-index: 10; }
+        .data-box { text-align: center; flex: 1; border-right: 1px solid #333; }
+        .data-box:last-child { border-right: none; }
+        .data-label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 2px; display: block; }
+        .data-num { font-family: monospace; font-size: 20px; color: var(--accent); font-weight: bold; }
 
         #canvas-wrapper { flex: 1; background: #111; position: relative; }
-
         #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; border-top: 1px solid #444; }
         
         #rotate-ui { background: #3d4654; padding: 12px; border-radius: 12px; display: none; flex-direction: column; gap: 10px; }
         .rotate-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .r-btn { background: #4b6584; color: white; border: none; border-radius: 8px; padding: 10px 5px; flex: 1; font-size: 13px; font-weight: bold; }
-        .r-btn-big { background: #576574; border: 1px solid var(--accent); }
 
         #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); }
         #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; background: #222; color: white; }
@@ -42,13 +32,9 @@
         .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
         .btn-lock.active { background: var(--lock); color: black; }
-        
-        #file-input { display: none; }
     </style>
 </head>
 <body>
-
-    <div id="version-tag">v18.0</div>
 
     <div id="data-display">
         <div class="data-box"><span class="data-label">長 (W)</span><span id="txt-w" class="data-num">0</span><small>mm</small></div>
@@ -61,9 +47,9 @@
     <div id="bottom-menu">
         <div id="rotate-ui">
             <div class="rotate-row">
-                <button class="r-btn r-btn-big" onclick="stepRotate(-90)">↺ -90°</button>
-                <span id="rotate-info" style="font-family:monospace">0.0°</span>
-                <button class="r-btn r-btn-big" onclick="stepRotate(90)">↻ +90°</button>
+                <button class="r-btn" onclick="stepRotate(-90)">↺ -90°</button>
+                <span id="rotate-info">0.0°</span>
+                <button class="r-btn" onclick="stepRotate(90)">↻ +90°</button>
                 <button class="r-btn" style="flex:0.4" onclick="resetRotate()">0°</button>
             </div>
             <div class="rotate-row">
@@ -92,51 +78,68 @@
             <button class="btn" style="background:#576574; font-size:10px;" onclick="clearItems('room')">🧹 清圖案</button>
             <button class="btn" style="background:var(--primary); grid-column: span 2;" onclick="createRectRoom()"><span>🧱</span> 新增矩形</button>
         </div>
-        <input type="file" id="file-input" accept="image/*">
+        <input type="file" id="file-input" style="display:none" accept="image/*">
     </div>
 
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 260,
+            height: window.innerHeight - 250,
             backgroundColor: '#111',
             selection: false
         });
 
-        let pixelToMmRatio = 1;
-        let isPolyDrawing = false;
-        let pointArray = [];
-        let calibLine;
-        let isLocked = false;
-        let bgImg = null;
-        let currentAngle = 0;
+        let pixelToMmRatio = 1, isPolyDrawing = false, pointArray = [], calibLine = null, isLocked = false, bgImg = null, currentAngle = 0;
 
-        // --- 1. 數據更新邏輯 ---
+        // --- 1. 數據顯示 ---
         function updateDisplay(obj) {
             if (!obj) return;
-            if (obj.itemType === 'calib') {
-                const len = (obj.getScaledWidth() * pixelToMmRatio).toFixed(0);
-                document.getElementById('txt-w').innerText = len;
-                document.getElementById('txt-h').innerText = "---";
-                document.getElementById('txt-a').innerText = "---";
-            } else if (obj.itemType === 'room') {
-                const w = (obj.getScaledWidth() * pixelToMmRatio).toFixed(0);
-                const h = (obj.getScaledHeight() * pixelToMmRatio).toFixed(0);
-                const a = (obj.getScaledWidth() * pixelToMmRatio / 1000) * (obj.getScaledHeight() * pixelToMmRatio / 1000);
-                document.getElementById('txt-w').innerText = w;
-                document.getElementById('txt-h').innerText = h;
-                document.getElementById('txt-a').innerText = Math.abs(a).toFixed(2);
-            }
+            const w = (obj.getScaledWidth() * pixelToMmRatio).toFixed(0);
+            const h = (obj.getScaledHeight() * pixelToMmRatio).toFixed(0);
+            const a = (obj.getScaledWidth() * pixelToMmRatio / 1000) * (obj.getScaledHeight() * pixelToMmRatio / 1000);
+            document.getElementById('txt-w').innerText = w;
+            document.getElementById('txt-h').innerText = h;
+            document.getElementById('txt-a').innerText = Math.abs(a).toFixed(2);
         }
 
-        canvas.on({
-            'object:scaling': (e) => updateDisplay(e.target),
-            'object:moving': (e) => updateDisplay(e.target),
-            'selection:created': (e) => updateDisplay(e.selected[0]),
-            'selection:updated': (e) => updateDisplay(e.selected[0])
+        canvas.on({'object:scaling': (e) => updateDisplay(e.target), 'object:moving': (e) => updateDisplay(e.target), 'selection:created': (e) => updateDisplay(e.selected[0])});
+
+        // --- 2. 單指平移邏輯 ---
+        let lastPosX, lastPosY, isDragging = false, lastDist = 0;
+
+        canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const target = canvas.findTarget(e);
+                // 如果冇選中嘢，或者圖紙未鎖，就開始拖動
+                if (!target || !isLocked) {
+                    isDragging = true;
+                    lastPosX = e.touches[0].pageX;
+                    lastPosY = e.touches[0].pageY;
+                }
+            } else if (e.touches.length === 2) {
+                lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            }
         });
 
-        // --- 2. 旋轉與鎖定 ---
+        canvas.upperCanvasEl.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                const vpt = canvas.viewportTransform;
+                vpt[4] += e.touches[0].pageX - lastPosX;
+                vpt[5] += e.touches[0].pageY - lastPosY;
+                canvas.requestRenderAll();
+                lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
+            } else if (e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                const zoom = canvas.getZoom() * (dist / lastDist);
+                if (zoom > 0.05 && zoom < 20) {
+                    canvas.zoomToPoint({ x: (e.touches[0].pageX + e.touches[1].pageX)/2, y: (e.touches[0].pageY + e.touches[1].pageY)/2 }, zoom);
+                }
+                lastDist = dist;
+            }
+        });
+        canvas.upperCanvasEl.addEventListener('touchend', () => isDragging = false);
+
+        // --- 3. 比例與旋轉 ---
         function toggleLock() {
             isLocked = !isLocked;
             document.getElementById('lock-btn').classList.toggle('active', isLocked);
@@ -145,47 +148,6 @@
             canvas.requestRenderAll();
         }
 
-        function stepRotate(step) {
-            if (!bgImg) return;
-            currentAngle = parseFloat((currentAngle + step).toFixed(1));
-            document.getElementById('rotate-info').innerText = currentAngle.toFixed(1) + '°';
-            bgImg.set('angle', currentAngle);
-            canvas.requestRenderAll();
-        }
-
-        function resetRotate() { currentAngle = 0; stepRotate(0); }
-
-        // --- 3. 手勢控制 (縮放/平移) ---
-        let lastDist = 0, isDragging = false, lastPosX, lastPosY;
-        canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2) {
-                lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            } else if (e.touches.length === 1 && !isLocked) {
-                if (!canvas.findTarget(e)) {
-                    isDragging = true;
-                    lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
-                }
-            }
-        });
-        canvas.upperCanvasEl.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2) {
-                const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                const zoom = canvas.getZoom() * (dist / lastDist);
-                if (zoom > 0.05 && zoom < 20) {
-                    canvas.zoomToPoint({ x: (e.touches[0].pageX + e.touches[1].pageX)/2, y: (e.touches[0].pageY + e.touches[1].pageY)/2 - 50 }, zoom);
-                }
-                lastDist = dist;
-            } else if (isDragging && !isLocked) {
-                const vpt = canvas.viewportTransform;
-                vpt[4] += e.touches[0].pageX - lastPosX;
-                vpt[5] += e.touches[0].pageY - lastPosY;
-                canvas.requestRenderAll();
-                lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
-            }
-        });
-        canvas.upperCanvasEl.addEventListener('touchend', () => isDragging = false);
-
-        // --- 4. 功能邏輯 ---
         function startCalibration() {
             if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
@@ -199,12 +161,13 @@
             });
             calibLine.setControlsVisibility({ mt:false, mb:false, ml:true, mr:true, bl:false, br:false, tl:false, tr:false, mtr:false });
             canvas.add(calibLine); canvas.setActiveObject(calibLine);
-            updateDisplay(calibLine);
         }
 
         function confirmCalibration() {
             const mm = document.getElementById('input-mm').value;
             pixelToMmRatio = mm / (calibLine.width * calibLine.scaleX);
+            canvas.remove(calibLine); // 隱藏紅線
+            calibLine = null;
             document.getElementById('calib-ui').style.display = 'none';
             document.getElementById('calib-btn').classList.remove('active');
         }
@@ -215,25 +178,24 @@
             document.getElementById('calib-btn').classList.remove('active');
         }
 
-        function clearItems(type) {
-            const objs = canvas.getObjects();
-            for (let i = objs.length - 1; i >= 0; i--) {
-                if (objs[i].itemType === type) canvas.remove(objs[i]);
-            }
+        function stepRotate(step) {
+            if (!bgImg) return;
+            currentAngle = parseFloat((currentAngle + step).toFixed(1));
+            document.getElementById('rotate-info').innerText = currentAngle.toFixed(1) + '°';
+            bgImg.set('angle', currentAngle); canvas.requestRenderAll();
         }
+        function resetRotate() { currentAngle = 0; stepRotate(0); }
 
+        // --- 4. 繪圖功能 ---
         function createRectRoom() {
             if(!isLocked) toggleLock();
             const center = canvas.getVpCenter();
             const rect = new fabric.Rect({
                 left: center.x - 50, top: center.y - 50, width: 100, height: 100,
                 fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1,
-                strokeUniform: true, transparentCorners: true, cornerSize: 40,
-                cornerColor: 'transparent', itemType: 'room'
+                strokeUniform: true, transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room'
             });
-            canvas.add(rect);
-            canvas.setActiveObject(rect);
-            updateDisplay(rect);
+            canvas.add(rect); canvas.setActiveObject(rect); updateDisplay(rect);
         }
 
         function togglePolyMode() {
@@ -246,18 +208,17 @@
             if (!isPolyDrawing || !opt.e.touches) return;
             const pointer = canvas.getPointer(opt.e);
             if (pointArray.length > 2 && opt.target && opt.target.id === 'firstPoint') {
-                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), { 
-                    fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true, 
-                    transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room' 
-                });
-                canvas.add(poly);
-                pointArray.forEach(p => canvas.remove(p)); pointArray = [];
-                isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
-                return;
+                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), { fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true, transparentCorners: true, cornerSize: 40, itemType: 'room' });
+                canvas.add(poly); pointArray.forEach(p => canvas.remove(p)); pointArray = []; isPolyDrawing = false;
+                document.getElementById('poly-btn').classList.remove('active'); return;
             }
             const dot = new fabric.Circle({ radius: 25, fill: pointArray.length===0?'#00b894':'rgba(255,255,255,0.3)', left: pointer.x, top: pointer.y, originX:'center', originY:'center', id: pointArray.length===0?'firstPoint':'dot' });
             pointArray.push(dot); canvas.add(dot);
         });
+
+        function clearItems(type) {
+            canvas.getObjects().forEach(obj => { if(obj.itemType === type) canvas.remove(obj); });
+        }
 
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
@@ -265,19 +226,14 @@
                 fabric.Image.fromURL(f.target.result, (img) => {
                     canvas.clear();
                     const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
-                    img.set({ 
-                        itemType: 'bg', selectable: false, 
-                        originX: 'center', originY: 'center',
-                        left: canvas.width / 2, top: canvas.height / 2
-                    });
-                    bgImg = img; canvas.add(img);
-                    img.scale(ratio); img.sendToBack();
-                    resetRotate();
-                    document.getElementById('rotate-ui').style.display = 'flex';
+                    img.set({ itemType: 'bg', selectable: false, originX: 'center', originY: 'center', left: canvas.width / 2, top: canvas.height / 2 });
+                    bgImg = img; canvas.add(img); img.scale(ratio); img.sendToBack();
+                    resetRotate(); document.getElementById('rotate-ui').style.display = 'flex';
                 });
             };
             reader.readAsDataURL(e.target.files[0]);
         };
     </script>
+    <input type="file" id="file-input" style="display:none" accept="image/*">
 </body>
 </html>
