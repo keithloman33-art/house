@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v14.0</title>
+    <title>工程量度 App v15.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
@@ -15,25 +15,38 @@
         #canvas-wrapper { flex: 1; background: #111; position: relative; }
 
         #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; border-top: 1px solid #444; }
-        #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); margin-bottom: 5px; }
+        
+        /* 旋轉控制區 */
+        #rotate-ui { background: #3d4654; padding: 10px; border-radius: 12px; display: none; flex-direction: column; gap: 5px; }
+        .slider-row { display: flex; align-items: center; gap: 10px; }
+        #rotate-slider { flex: 1; accent-color: var(--primary); }
+
+        #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); }
         #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; background: #222; color: white; }
         
         .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
         .btn-lock.active { background: var(--lock); color: black; }
-        .btn-clear { background: #576574; font-size: 10px; }
-
+        
         #file-input { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="version-tag">Ver 14.0</div>
+    <div id="version-tag">Ver 15.0</div>
 
     <div id="canvas-wrapper"><canvas id="c"></canvas></div>
 
     <div id="bottom-menu">
+        <div id="rotate-ui">
+            <div class="slider-row">
+                <span>🔄 旋轉圖紙: <span id="rotate-val">0</span>°</span>
+                <input type="range" id="rotate-slider" min="-180" max="180" value="0">
+                <button onclick="resetRotate()" style="padding:2px 8px; border-radius:4px; border:none; background:#576574; color:white;">重置</button>
+            </div>
+        </div>
+
         <div id="calib-ui">
             <input type="number" id="input-mm" pattern="[0-9]*" value="1000">
             <button class="btn" style="background:var(--accent); min-width:60px;" onclick="confirmCalibration()">OK</button>
@@ -48,8 +61,8 @@
         </div>
 
         <div class="btn-row">
-            <button class="btn btn-clear" style="border-left: 4px solid var(--danger)" onclick="clearItems('calib')">🗑️ 清空比例</button>
-            <button class="btn btn-clear" style="border-left: 4px solid var(--primary)" onclick="clearItems('room')">🧹 清空圖案</button>
+            <button class="btn" style="background:var(--danger); font-size:10px;" onclick="clearItems('calib')">🗑️ 清比例</button>
+            <button class="btn" style="background:#576574; font-size:10px;" onclick="clearItems('room')">🧹 清圖案</button>
             <button class="btn" style="background:var(--primary); grid-column: span 2;" onclick="createRectRoom()"><span>🧱</span> 新增標註矩形</button>
         </div>
         <input type="file" id="file-input" accept="image/*">
@@ -58,7 +71,7 @@
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 150, // 增加畫布高度
+            height: window.innerHeight - 180,
             backgroundColor: '#111',
             selection: false
         });
@@ -68,18 +81,34 @@
         let pointArray = [];
         let calibLine;
         let isLocked = false;
+        let bgImg = null;
 
-        // --- 1. 畫布控制 (縮放/平移) ---
-        let lastDist = 0;
-        let isDragging = false;
-        let lastPosX, lastPosY;
-
+        // --- 1. 旋轉與鎖定邏輯 ---
         function toggleLock() {
             isLocked = !isLocked;
             document.getElementById('lock-btn').classList.toggle('active', isLocked);
+            document.getElementById('rotate-ui').style.display = (isLocked || !bgImg) ? 'none' : 'flex';
             canvas.forEachObject(obj => { if(obj.itemType !== 'bg') obj.selectable = isLocked; });
             canvas.requestRenderAll();
         }
+
+        const rotateSlider = document.getElementById('rotate-slider');
+        rotateSlider.oninput = function() {
+            if (!bgImg) return;
+            const angle = parseInt(this.value);
+            document.getElementById('rotate-val').innerText = angle;
+            bgImg.set('angle', angle);
+            canvas.requestRenderAll();
+        };
+
+        function resetRotate() {
+            rotateSlider.value = 0;
+            document.getElementById('rotate-val').innerText = 0;
+            if (bgImg) { bgImg.set('angle', 0); canvas.requestRenderAll(); }
+        }
+
+        // --- 2. 手勢控制 (縮放/平移) ---
+        let lastDist = 0, isDragging = false, lastPosX, lastPosY;
 
         canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
@@ -110,7 +139,7 @@
         });
         canvas.upperCanvasEl.addEventListener('touchend', () => { isDragging = false; });
 
-        // --- 2. 比例線與清空 (幼線化) ---
+        // --- 3. 比例線與清空 ---
         function startCalibration() {
             if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
@@ -118,8 +147,7 @@
             document.getElementById('calib-btn').classList.add('active');
             const center = canvas.getVpCenter();
             calibLine = new fabric.Rect({
-                width: 200, height: 2, // 減幼到 2px
-                fill: '#ff7675', left: center.x - 100, top: center.y,
+                width: 200, height: 2, fill: '#ff7675', left: center.x - 100, top: center.y,
                 originY: 'center', transparentCorners: true, cornerSize: 45, cornerColor: 'transparent',
                 hasBorders: false, itemType: 'calib', strokeUniform: true
             });
@@ -149,27 +177,19 @@
             }
         }
 
-        // --- 3. 標註矩形 (幼線化 1px) ---
+        // --- 4. 矩形與標籤 ---
         function createRectRoom() {
             if(!isLocked) toggleLock();
             const center = canvas.getVpCenter();
             const rect = new fabric.Rect({
                 left: center.x - 50, top: center.y - 50, width: 100, height: 100,
-                fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', 
-                strokeWidth: 1, // 減幼到 1px
+                fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1,
                 strokeUniform: true, transparentCorners: true, cornerSize: 40,
                 cornerColor: 'transparent', itemType: 'room'
             });
-
-            const text = new fabric.Text('', {
-                fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)',
-                originX: 'center', originY: 'center', selectable: false, itemType: 'label',
-                fontFamily: 'monospace'
-            });
-
+            const text = new fabric.Text('', { fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)', originX: 'center', originY: 'center', selectable: false, itemType: 'label', fontFamily: 'monospace' });
             rect.on('moving', () => updateRectLabel(rect, text));
             rect.on('scaling', () => updateRectLabel(rect, text));
-            
             canvas.add(rect, text);
             updateRectLabel(rect, text);
             canvas.setActiveObject(rect);
@@ -179,14 +199,10 @@
             const w = (rect.getScaledWidth() * pixelToMmRatio).toFixed(0);
             const h = (rect.getScaledHeight() * pixelToMmRatio).toFixed(0);
             const area = (rect.getScaledWidth() * pixelToMmRatio / 1000) * (rect.getScaledHeight() * pixelToMmRatio / 1000);
-            text.set({
-                text: `${w} x ${h} mm\n(${area.toFixed(2)} m²)`,
-                left: rect.left + rect.getScaledWidth() / 2,
-                top: rect.top + rect.getScaledHeight() / 2
-            });
+            text.set({ text: `${w} x ${h} mm\n(${area.toFixed(2)} m²)`, left: rect.left + rect.getScaledWidth() / 2, top: rect.top + rect.getScaledHeight() / 2 });
         }
 
-        // --- 4. 自由繪 ---
+        // --- 5. 自由繪 ---
         function togglePolyMode() {
             isPolyDrawing = !isPolyDrawing;
             document.getElementById('poly-btn').classList.toggle('active', isPolyDrawing);
@@ -197,10 +213,7 @@
             if (!isPolyDrawing || !opt.e.touches) return;
             const pointer = canvas.getPointer(opt.e);
             if (pointArray.length > 2 && opt.target && opt.target.id === 'firstPoint') {
-                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), {
-                    fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true,
-                    transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room'
-                });
+                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), { fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true, transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room' });
                 canvas.add(poly);
                 pointArray.forEach(p => canvas.remove(p)); pointArray = [];
                 isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
@@ -210,14 +223,27 @@
             pointArray.push(dot); canvas.add(dot);
         });
 
+        // --- 6. 檔案處理 ---
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (f) => {
                 fabric.Image.fromURL(f.target.result, (img) => {
                     canvas.clear();
                     const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
-                    img.set({ itemType: 'bg', selectable: false });
-                    canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), { scaleX: ratio, scaleY: ratio });
+                    img.set({ 
+                        itemType: 'bg', 
+                        selectable: false, 
+                        originX: 'center', 
+                        originY: 'center',
+                        left: canvas.width / 2,
+                        top: canvas.height / 2
+                    });
+                    bgImg = img;
+                    canvas.add(img);
+                    img.scale(ratio);
+                    img.sendToBack();
+                    resetRotate();
+                    document.getElementById('rotate-ui').style.display = 'flex';
                 });
             };
             reader.readAsDataURL(e.target.files[0]);
