@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v13.0</title>
+    <title>工程量度 App v14.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
@@ -11,15 +11,12 @@
         html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: #000; color: white; }
         body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
 
-        #version-tag { position: absolute; top: 5px; right: 10px; font-size: 10px; color: #666; z-index: 20; }
-        #data-header { background: rgba(0,0,0,0.85); padding: 12px; display: flex; justify-content: space-around; z-index: 10; border-bottom: 1px solid #333; }
-        .stat-val { color: var(--accent); font-weight: bold; font-family: monospace; font-size: 18px; }
-
+        #version-tag { position: absolute; top: 10px; left: 10px; font-size: 12px; font-weight: bold; color: #fff; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; z-index: 20; }
         #canvas-wrapper { flex: 1; background: #111; position: relative; }
 
-        #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+        #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; border-top: 1px solid #444; }
         #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); margin-bottom: 5px; }
-        #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; }
+        #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; background: #222; color: white; }
         
         .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -32,11 +29,7 @@
 </head>
 <body>
 
-    <div id="version-tag">Ver 13.0</div>
-    <div id="data-header">
-        <div>長度: <span id="val-dist" class="stat-val">0</span> mm</div>
-        <div>面積: <span id="val-area" class="stat-val">0.00</span> m²</div>
-    </div>
+    <div id="version-tag">Ver 14.0</div>
 
     <div id="canvas-wrapper"><canvas id="c"></canvas></div>
 
@@ -65,7 +58,7 @@
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 240,
+            height: window.innerHeight - 150, // 增加畫布高度
             backgroundColor: '#111',
             selection: false
         });
@@ -117,7 +110,7 @@
         });
         canvas.upperCanvasEl.addEventListener('touchend', () => { isDragging = false; });
 
-        // --- 2. 比例線與清空邏輯 ---
+        // --- 2. 比例線與清空 (幼線化) ---
         function startCalibration() {
             if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
@@ -125,7 +118,8 @@
             document.getElementById('calib-btn').classList.add('active');
             const center = canvas.getVpCenter();
             calibLine = new fabric.Rect({
-                width: 200, height: 4, fill: '#ff7675', left: center.x - 100, top: center.y,
+                width: 200, height: 2, // 減幼到 2px
+                fill: '#ff7675', left: center.x - 100, top: center.y,
                 originY: 'center', transparentCorners: true, cornerSize: 45, cornerColor: 'transparent',
                 hasBorders: false, itemType: 'calib', strokeUniform: true
             });
@@ -153,25 +147,24 @@
                     canvas.remove(objs[i]);
                 }
             }
-            if(type === 'calib') document.getElementById('val-dist').innerText = "0";
-            if(type === 'room') document.getElementById('val-area').innerText = "0.00";
         }
 
-        // --- 3. 標註矩形 (帶文字顯示) ---
+        // --- 3. 標註矩形 (幼線化 1px) ---
         function createRectRoom() {
             if(!isLocked) toggleLock();
             const center = canvas.getVpCenter();
-            
             const rect = new fabric.Rect({
                 left: center.x - 50, top: center.y - 50, width: 100, height: 100,
-                fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2,
+                fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', 
+                strokeWidth: 1, // 減幼到 1px
                 strokeUniform: true, transparentCorners: true, cornerSize: 40,
                 cornerColor: 'transparent', itemType: 'room'
             });
 
             const text = new fabric.Text('', {
-                fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.5)',
-                originX: 'center', originY: 'center', selectable: false, itemType: 'label'
+                fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)',
+                originX: 'center', originY: 'center', selectable: false, itemType: 'label',
+                fontFamily: 'monospace'
             });
 
             rect.on('moving', () => updateRectLabel(rect, text));
@@ -185,13 +178,12 @@
         function updateRectLabel(rect, text) {
             const w = (rect.getScaledWidth() * pixelToMmRatio).toFixed(0);
             const h = (rect.getScaledHeight() * pixelToMmRatio).toFixed(0);
+            const area = (rect.getScaledWidth() * pixelToMmRatio / 1000) * (rect.getScaledHeight() * pixelToMmRatio / 1000);
             text.set({
-                text: `${w} x ${h} mm`,
+                text: `${w} x ${h} mm\n(${area.toFixed(2)} m²)`,
                 left: rect.left + rect.getScaledWidth() / 2,
                 top: rect.top + rect.getScaledHeight() / 2
             });
-            const area = (rect.getScaledWidth() * pixelToMmRatio / 1000) * (rect.getScaledHeight() * pixelToMmRatio / 1000);
-            document.getElementById('val-area').innerText = area.toFixed(2);
         }
 
         // --- 4. 自由繪 ---
@@ -206,7 +198,7 @@
             const pointer = canvas.getPointer(opt.e);
             if (pointArray.length > 2 && opt.target && opt.target.id === 'firstPoint') {
                 const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), {
-                    fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2, strokeUniform: true,
+                    fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true,
                     transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room'
                 });
                 canvas.add(poly);
@@ -214,15 +206,8 @@
                 isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
                 return;
             }
-            const dot = new fabric.Circle({ radius: 25, fill: pointArray.length===0?'#00b894':'rgba(255,255,255,0.4)', left: pointer.x, top: pointer.y, originX:'center', originY:'center', id: pointArray.length===0?'firstPoint':'dot' });
+            const dot = new fabric.Circle({ radius: 25, fill: pointArray.length===0?'#00b894':'rgba(255,255,255,0.3)', left: pointer.x, top: pointer.y, originX:'center', originY:'center', id: pointArray.length===0?'firstPoint':'dot' });
             pointArray.push(dot); canvas.add(dot);
-        });
-
-        // --- 其他工具 ---
-        canvas.on('object:scaling', (e) => {
-            if(e.target.itemType === 'calib') {
-                document.getElementById('val-dist').innerText = (e.target.width * e.target.scaleX * pixelToMmRatio).toFixed(1);
-            }
         });
 
         document.getElementById('file-input').onchange = (e) => {
