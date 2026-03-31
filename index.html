@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v17.0</title>
+    <title>工程量度 App v18.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
@@ -11,18 +11,29 @@
         html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: #000; color: white; }
         body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
 
-        #version-tag { position: absolute; top: 10px; left: 10px; font-size: 12px; font-weight: bold; color: #fff; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; z-index: 20; }
+        #version-tag { position: absolute; top: 10px; left: 10px; font-size: 10px; color: #666; z-index: 5; }
+        
+        /* 頂部數據看板 */
+        #data-display { 
+            background: rgba(0, 0, 0, 0.8); 
+            padding: 15px 10px; 
+            display: flex; 
+            justify-content: space-around; 
+            border-bottom: 1px solid #444;
+            z-index: 10;
+        }
+        .data-box { text-align: center; flex: 1; }
+        .data-label { font-size: 11px; color: #aaa; margin-bottom: 4px; display: block; }
+        .data-num { font-family: 'Courier New', monospace; font-size: 18px; color: var(--accent); font-weight: bold; }
+
         #canvas-wrapper { flex: 1; background: #111; position: relative; }
 
         #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; border-top: 1px solid #444; }
         
-        /* 旋轉控制區 */
-        #rotate-ui { background: #3d4654; padding: 12px; border-radius: 12px; display: none; flex-direction: column; gap: 12px; }
+        #rotate-ui { background: #3d4654; padding: 12px; border-radius: 12px; display: none; flex-direction: column; gap: 10px; }
         .rotate-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .r-btn { background: #4b6584; color: white; border: none; border-radius: 8px; padding: 12px 5px; flex: 1; font-size: 14px; font-weight: bold; }
-        .r-btn:active { background: var(--primary); }
+        .r-btn { background: #4b6584; color: white; border: none; border-radius: 8px; padding: 10px 5px; flex: 1; font-size: 13px; font-weight: bold; }
         .r-btn-big { background: #576574; border: 1px solid var(--accent); }
-        #rotate-val-display { min-width: 80px; text-align: center; font-family: monospace; font-size: 18px; color: var(--accent); font-weight: bold; }
 
         #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); }
         #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; background: #222; color: white; }
@@ -37,7 +48,13 @@
 </head>
 <body>
 
-    <div id="version-tag">Ver 17.0</div>
+    <div id="version-tag">v18.0</div>
+
+    <div id="data-display">
+        <div class="data-box"><span class="data-label">長 (W)</span><span id="txt-w" class="data-num">0</span><small>mm</small></div>
+        <div class="data-box"><span class="data-label">闊 (H)</span><span id="txt-h" class="data-num">0</span><small>mm</small></div>
+        <div class="data-box"><span class="data-label">面積</span><span id="txt-a" class="data-num">0.00</span><small>m²</small></div>
+    </div>
 
     <div id="canvas-wrapper"><canvas id="c"></canvas></div>
 
@@ -45,9 +62,9 @@
         <div id="rotate-ui">
             <div class="rotate-row">
                 <button class="r-btn r-btn-big" onclick="stepRotate(-90)">↺ -90°</button>
-                <div id="rotate-val-display">0.0°</div>
+                <span id="rotate-info" style="font-family:monospace">0.0°</span>
                 <button class="r-btn r-btn-big" onclick="stepRotate(90)">↻ +90°</button>
-                <button class="r-btn" style="background:#2f3542; flex:0.5;" onclick="resetRotate()">0°</button>
+                <button class="r-btn" style="flex:0.4" onclick="resetRotate()">0°</button>
             </div>
             <div class="rotate-row">
                 <button class="r-btn" onclick="stepRotate(-1)">-1°</button>
@@ -73,7 +90,7 @@
         <div class="btn-row">
             <button class="btn" style="background:var(--danger); font-size:10px;" onclick="clearItems('calib')">🗑️ 清比例</button>
             <button class="btn" style="background:#576574; font-size:10px;" onclick="clearItems('room')">🧹 清圖案</button>
-            <button class="btn" style="background:var(--primary); grid-column: span 2;" onclick="createRectRoom()"><span>🧱</span> 新增標註矩形</button>
+            <button class="btn" style="background:var(--primary); grid-column: span 2;" onclick="createRectRoom()"><span>🧱</span> 新增矩形</button>
         </div>
         <input type="file" id="file-input" accept="image/*">
     </div>
@@ -81,7 +98,7 @@
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 200, // 調整高度容納兩行旋轉掣
+            height: window.innerHeight - 260,
             backgroundColor: '#111',
             selection: false
         });
@@ -94,7 +111,32 @@
         let bgImg = null;
         let currentAngle = 0;
 
-        // --- 1. 旋轉與鎖定 ---
+        // --- 1. 數據更新邏輯 ---
+        function updateDisplay(obj) {
+            if (!obj) return;
+            if (obj.itemType === 'calib') {
+                const len = (obj.getScaledWidth() * pixelToMmRatio).toFixed(0);
+                document.getElementById('txt-w').innerText = len;
+                document.getElementById('txt-h').innerText = "---";
+                document.getElementById('txt-a').innerText = "---";
+            } else if (obj.itemType === 'room') {
+                const w = (obj.getScaledWidth() * pixelToMmRatio).toFixed(0);
+                const h = (obj.getScaledHeight() * pixelToMmRatio).toFixed(0);
+                const a = (obj.getScaledWidth() * pixelToMmRatio / 1000) * (obj.getScaledHeight() * pixelToMmRatio / 1000);
+                document.getElementById('txt-w').innerText = w;
+                document.getElementById('txt-h').innerText = h;
+                document.getElementById('txt-a').innerText = Math.abs(a).toFixed(2);
+            }
+        }
+
+        canvas.on({
+            'object:scaling': (e) => updateDisplay(e.target),
+            'object:moving': (e) => updateDisplay(e.target),
+            'selection:created': (e) => updateDisplay(e.selected[0]),
+            'selection:updated': (e) => updateDisplay(e.selected[0])
+        });
+
+        // --- 2. 旋轉與鎖定 ---
         function toggleLock() {
             isLocked = !isLocked;
             document.getElementById('lock-btn').classList.toggle('active', isLocked);
@@ -106,21 +148,15 @@
         function stepRotate(step) {
             if (!bgImg) return;
             currentAngle = parseFloat((currentAngle + step).toFixed(1));
-            updateRotation();
-        }
-
-        function resetRotate() { currentAngle = 0; updateRotation(); }
-
-        function updateRotation() {
-            if (!bgImg) return;
-            document.getElementById('rotate-val-display').innerText = currentAngle.toFixed(1) + '°';
+            document.getElementById('rotate-info').innerText = currentAngle.toFixed(1) + '°';
             bgImg.set('angle', currentAngle);
             canvas.requestRenderAll();
         }
 
-        // --- 2. 手勢控制 (縮放/平移) ---
-        let lastDist = 0, isDragging = false, lastPosX, lastPosY;
+        function resetRotate() { currentAngle = 0; stepRotate(0); }
 
+        // --- 3. 手勢控制 (縮放/平移) ---
+        let lastDist = 0, isDragging = false, lastPosX, lastPosY;
         canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
                 lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -131,7 +167,6 @@
                 }
             }
         });
-
         canvas.upperCanvasEl.addEventListener('touchmove', (e) => {
             if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -148,9 +183,9 @@
                 lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
             }
         });
-        canvas.upperCanvasEl.addEventListener('touchend', () => { isDragging = false; });
+        canvas.upperCanvasEl.addEventListener('touchend', () => isDragging = false);
 
-        // --- 3. 比例線與清空 ---
+        // --- 4. 功能邏輯 ---
         function startCalibration() {
             if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
@@ -164,6 +199,7 @@
             });
             calibLine.setControlsVisibility({ mt:false, mb:false, ml:true, mr:true, bl:false, br:false, tl:false, tr:false, mtr:false });
             canvas.add(calibLine); canvas.setActiveObject(calibLine);
+            updateDisplay(calibLine);
         }
 
         function confirmCalibration() {
@@ -182,13 +218,10 @@
         function clearItems(type) {
             const objs = canvas.getObjects();
             for (let i = objs.length - 1; i >= 0; i--) {
-                if (objs[i].itemType === type || (type === 'room' && objs[i].itemType === 'label')) {
-                    canvas.remove(objs[i]);
-                }
+                if (objs[i].itemType === type) canvas.remove(objs[i]);
             }
         }
 
-        // --- 4. 矩形標註 ---
         function createRectRoom() {
             if(!isLocked) toggleLock();
             const center = canvas.getVpCenter();
@@ -198,22 +231,11 @@
                 strokeUniform: true, transparentCorners: true, cornerSize: 40,
                 cornerColor: 'transparent', itemType: 'room'
             });
-            const text = new fabric.Text('', { fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.6)', originX: 'center', originY: 'center', selectable: false, itemType: 'label', fontFamily: 'monospace' });
-            rect.on('moving', () => updateRectLabel(rect, text));
-            rect.on('scaling', () => updateRectLabel(rect, text));
-            canvas.add(rect, text);
-            updateRectLabel(rect, text);
+            canvas.add(rect);
             canvas.setActiveObject(rect);
+            updateDisplay(rect);
         }
 
-        function updateRectLabel(rect, text) {
-            const w = (rect.getScaledWidth() * pixelToMmRatio).toFixed(0);
-            const h = (rect.getScaledHeight() * pixelToMmRatio).toFixed(0);
-            const area = (rect.getScaledWidth() * pixelToMmRatio / 1000) * (rect.getScaledHeight() * pixelToMmRatio / 1000);
-            text.set({ text: `${w} x ${h} mm\n(${area.toFixed(2)} m²)`, left: rect.left + rect.getScaledWidth() / 2, top: rect.top + rect.getScaledHeight() / 2 });
-        }
-
-        // --- 5. 自由繪 ---
         function togglePolyMode() {
             isPolyDrawing = !isPolyDrawing;
             document.getElementById('poly-btn').classList.toggle('active', isPolyDrawing);
@@ -224,7 +246,10 @@
             if (!isPolyDrawing || !opt.e.touches) return;
             const pointer = canvas.getPointer(opt.e);
             if (pointArray.length > 2 && opt.target && opt.target.id === 'firstPoint') {
-                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), { fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true, transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room' });
+                const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })), { 
+                    fill: 'rgba(108, 92, 231, 0.2)', stroke: '#6c5ce7', strokeWidth: 1, strokeUniform: true, 
+                    transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room' 
+                });
                 canvas.add(poly);
                 pointArray.forEach(p => canvas.remove(p)); pointArray = [];
                 isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
@@ -234,7 +259,6 @@
             pointArray.push(dot); canvas.add(dot);
         });
 
-        // --- 6. 檔案處理 ---
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (f) => {
