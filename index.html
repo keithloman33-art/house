@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v16.0</title>
+    <title>工程量度 App v17.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
@@ -16,11 +16,13 @@
 
         #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; border-top: 1px solid #444; }
         
-        /* 精準旋轉控制區 */
-        #rotate-ui { background: #3d4654; padding: 12px; border-radius: 12px; display: none; flex-direction: column; gap: 10px; }
-        .rotate-controls { display: flex; justify-content: space-between; align-items: center; gap: 5px; }
-        .r-btn { background: #4b6584; color: white; border: none; border-radius: 8px; padding: 10px 5px; flex: 1; font-size: 14px; font-weight: bold; active { background: var(--primary); } }
-        #rotate-val-display { min-width: 70px; text-align: center; font-family: monospace; font-size: 16px; color: var(--accent); }
+        /* 旋轉控制區 */
+        #rotate-ui { background: #3d4654; padding: 12px; border-radius: 12px; display: none; flex-direction: column; gap: 12px; }
+        .rotate-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .r-btn { background: #4b6584; color: white; border: none; border-radius: 8px; padding: 12px 5px; flex: 1; font-size: 14px; font-weight: bold; }
+        .r-btn:active { background: var(--primary); }
+        .r-btn-big { background: #576574; border: 1px solid var(--accent); }
+        #rotate-val-display { min-width: 80px; text-align: center; font-family: monospace; font-size: 18px; color: var(--accent); font-weight: bold; }
 
         #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); }
         #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; background: #222; color: white; }
@@ -35,19 +37,23 @@
 </head>
 <body>
 
-    <div id="version-tag">Ver 16.0</div>
+    <div id="version-tag">Ver 17.0</div>
 
     <div id="canvas-wrapper"><canvas id="c"></canvas></div>
 
     <div id="bottom-menu">
         <div id="rotate-ui">
-            <div class="rotate-controls">
+            <div class="rotate-row">
+                <button class="r-btn r-btn-big" onclick="stepRotate(-90)">↺ -90°</button>
+                <div id="rotate-val-display">0.0°</div>
+                <button class="r-btn r-btn-big" onclick="stepRotate(90)">↻ +90°</button>
+                <button class="r-btn" style="background:#2f3542; flex:0.5;" onclick="resetRotate()">0°</button>
+            </div>
+            <div class="rotate-row">
                 <button class="r-btn" onclick="stepRotate(-1)">-1°</button>
                 <button class="r-btn" onclick="stepRotate(-0.1)">-0.1°</button>
-                <div id="rotate-val-display">0.0°</div>
                 <button class="r-btn" onclick="stepRotate(0.1)">+0.1°</button>
                 <button class="r-btn" onclick="stepRotate(1)">+1°</button>
-                <button class="r-btn" style="background:#576574; flex:0.6;" onclick="resetRotate()">0°</button>
             </div>
         </div>
 
@@ -75,7 +81,7 @@
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 180,
+            height: window.innerHeight - 200, // 調整高度容納兩行旋轉掣
             backgroundColor: '#111',
             selection: false
         });
@@ -88,7 +94,7 @@
         let bgImg = null;
         let currentAngle = 0;
 
-        // --- 1. 旋轉與鎖定邏輯 ---
+        // --- 1. 旋轉與鎖定 ---
         function toggleLock() {
             isLocked = !isLocked;
             document.getElementById('lock-btn').classList.toggle('active', isLocked);
@@ -103,10 +109,7 @@
             updateRotation();
         }
 
-        function resetRotate() {
-            currentAngle = 0;
-            updateRotation();
-        }
+        function resetRotate() { currentAngle = 0; updateRotation(); }
 
         function updateRotation() {
             if (!bgImg) return;
