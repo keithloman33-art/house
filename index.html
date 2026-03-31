@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App v12.0</title>
+    <title>工程量度 App v13.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
-        :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; }
+        :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; --danger: #eb4d4b; }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; touch-action: none; }
         html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: #000; color: white; }
         body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
@@ -25,14 +25,14 @@
         .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
         .btn-lock.active { background: var(--lock); color: black; }
-        .btn-large { grid-column: span 2; flex-direction: row; justify-content: center; font-size: 14px; padding: 15px; }
+        .btn-clear { background: #576574; font-size: 10px; }
 
         #file-input { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="version-tag">Ver 12.0</div>
+    <div id="version-tag">Ver 13.0</div>
     <div id="data-header">
         <div>長度: <span id="val-dist" class="stat-val">0</span> mm</div>
         <div>面積: <span id="val-area" class="stat-val">0.00</span> m²</div>
@@ -55,8 +55,9 @@
         </div>
 
         <div class="btn-row">
-            <button class="btn btn-large" style="background:#eb4d4b" onclick="clearDrawings()">🗑️ 清空線條</button>
-            <button class="btn btn-large" onclick="createRectRoom()"><span>🧱</span>新增矩形</button>
+            <button class="btn btn-clear" style="border-left: 4px solid var(--danger)" onclick="clearItems('calib')">🗑️ 清空比例</button>
+            <button class="btn btn-clear" style="border-left: 4px solid var(--primary)" onclick="clearItems('room')">🧹 清空圖案</button>
+            <button class="btn" style="background:var(--primary); grid-column: span 2;" onclick="createRectRoom()"><span>🧱</span> 新增標註矩形</button>
         </div>
         <input type="file" id="file-input" accept="image/*">
     </div>
@@ -64,7 +65,7 @@
     <script>
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: window.innerHeight - 230,
+            height: window.innerHeight - 240,
             backgroundColor: '#111',
             selection: false
         });
@@ -75,7 +76,7 @@
         let calibLine;
         let isLocked = false;
 
-        // --- 1. 手勢控制 (穩定版) ---
+        // --- 1. 畫布控制 (縮放/平移) ---
         let lastDist = 0;
         let isDragging = false;
         let lastPosX, lastPosY;
@@ -116,61 +117,84 @@
         });
         canvas.upperCanvasEl.addEventListener('touchend', () => { isDragging = false; });
 
-        // --- 2. 紅線核心重構：利用 Rect 模擬 Line 以獲得更好的觸控拉動 ---
-        function createSmartLine(width, color, type) {
-            const line = new fabric.Rect({
-                width: width,
-                height: 4, // 鎖死高度，保證唔會變粗
-                fill: color,
-                originY: 'center',
-                transparentCorners: true,
-                cornerSize: 45,
-                cornerColor: 'transparent',
-                hasBorders: false,
-                strokeUniform: true,
-                itemType: type
-            });
-            // 淨係保留左右拉動掣
-            line.setControlsVisibility({ mt:false, mb:false, ml:true, mr:true, bl:false, br:false, tl:false, tr:false, mtr:false });
-            return line;
-        }
-
+        // --- 2. 比例線與清空邏輯 ---
         function startCalibration() {
             if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
             document.getElementById('calib-ui').style.display = 'flex';
             document.getElementById('calib-btn').classList.add('active');
             const center = canvas.getVpCenter();
-            calibLine = createSmartLine(200, '#ff7675', 'calib');
-            calibLine.set({ left: center.x - 100, top: center.y });
+            calibLine = new fabric.Rect({
+                width: 200, height: 4, fill: '#ff7675', left: center.x - 100, top: center.y,
+                originY: 'center', transparentCorners: true, cornerSize: 45, cornerColor: 'transparent',
+                hasBorders: false, itemType: 'calib', strokeUniform: true
+            });
+            calibLine.setControlsVisibility({ mt:false, mb:false, ml:true, mr:true, bl:false, br:false, tl:false, tr:false, mtr:false });
             canvas.add(calibLine); canvas.setActiveObject(calibLine);
         }
 
         function confirmCalibration() {
             const mm = document.getElementById('input-mm').value;
-            const pxLen = calibLine.width * calibLine.scaleX;
-            pixelToMmRatio = mm / pxLen;
-            cancelCalibration();
-        }
-
-        function cancelCalibration() {
-            if(calibLine) canvas.remove(calibLine);
-            calibLine = null;
+            pixelToMmRatio = mm / (calibLine.width * calibLine.scaleX);
             document.getElementById('calib-ui').style.display = 'none';
             document.getElementById('calib-btn').classList.remove('active');
         }
 
-        // --- 3. 自由繪與清空邏輯 ---
-        function createRectRoom() {
-            if(!isLocked) toggleLock();
-            const rect = new fabric.Rect({
-                left: 100, top: 100, width: 100, height: 100,
-                fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2, strokeUniform: true,
-                transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room'
-            });
-            canvas.add(rect); canvas.setActiveObject(rect);
+        function cancelCalibration() {
+            if(calibLine) canvas.remove(calibLine);
+            document.getElementById('calib-ui').style.display = 'none';
+            document.getElementById('calib-btn').classList.remove('active');
         }
 
+        function clearItems(type) {
+            const objs = canvas.getObjects();
+            for (let i = objs.length - 1; i >= 0; i--) {
+                if (objs[i].itemType === type || (type === 'room' && objs[i].itemType === 'label')) {
+                    canvas.remove(objs[i]);
+                }
+            }
+            if(type === 'calib') document.getElementById('val-dist').innerText = "0";
+            if(type === 'room') document.getElementById('val-area').innerText = "0.00";
+        }
+
+        // --- 3. 標註矩形 (帶文字顯示) ---
+        function createRectRoom() {
+            if(!isLocked) toggleLock();
+            const center = canvas.getVpCenter();
+            
+            const rect = new fabric.Rect({
+                left: center.x - 50, top: center.y - 50, width: 100, height: 100,
+                fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2,
+                strokeUniform: true, transparentCorners: true, cornerSize: 40,
+                cornerColor: 'transparent', itemType: 'room'
+            });
+
+            const text = new fabric.Text('', {
+                fontSize: 14, fill: '#fff', backgroundColor: 'rgba(0,0,0,0.5)',
+                originX: 'center', originY: 'center', selectable: false, itemType: 'label'
+            });
+
+            rect.on('moving', () => updateRectLabel(rect, text));
+            rect.on('scaling', () => updateRectLabel(rect, text));
+            
+            canvas.add(rect, text);
+            updateRectLabel(rect, text);
+            canvas.setActiveObject(rect);
+        }
+
+        function updateRectLabel(rect, text) {
+            const w = (rect.getScaledWidth() * pixelToMmRatio).toFixed(0);
+            const h = (rect.getScaledHeight() * pixelToMmRatio).toFixed(0);
+            text.set({
+                text: `${w} x ${h} mm`,
+                left: rect.left + rect.getScaledWidth() / 2,
+                top: rect.top + rect.getScaledHeight() / 2
+            });
+            const area = (rect.getScaledWidth() * pixelToMmRatio / 1000) * (rect.getScaledHeight() * pixelToMmRatio / 1000);
+            document.getElementById('val-area').innerText = area.toFixed(2);
+        }
+
+        // --- 4. 自由繪 ---
         function togglePolyMode() {
             isPolyDrawing = !isPolyDrawing;
             document.getElementById('poly-btn').classList.toggle('active', isPolyDrawing);
@@ -190,22 +214,16 @@
                 isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
                 return;
             }
-            const dot = new fabric.Circle({ radius: 25, fill: pointArray.length === 0 ? '#00b894' : 'rgba(255,255,255,0.4)', left: pointer.x, top: pointer.y, originX: 'center', originY: 'center', id: pointArray.length === 0 ? 'firstPoint' : 'dot' });
+            const dot = new fabric.Circle({ radius: 25, fill: pointArray.length===0?'#00b894':'rgba(255,255,255,0.4)', left: pointer.x, top: pointer.y, originX:'center', originY:'center', id: pointArray.length===0?'firstPoint':'dot' });
             pointArray.push(dot); canvas.add(dot);
         });
 
-        // --- 數據與清空 ---
-        function updateData(obj) {
-            if(!obj) return;
-            if(obj.itemType === 'calib') {
-                document.getElementById('val-dist').innerText = (obj.width * obj.scaleX * pixelToMmRatio).toFixed(1);
-            } else if(obj.itemType === 'room') {
-                const area = (obj.getScaledWidth() * pixelToMmRatio / 1000) * (obj.getScaledHeight() * pixelToMmRatio / 1000);
-                document.getElementById('val-area').innerText = Math.abs(area).toFixed(2);
+        // --- 其他工具 ---
+        canvas.on('object:scaling', (e) => {
+            if(e.target.itemType === 'calib') {
+                document.getElementById('val-dist').innerText = (e.target.width * e.target.scaleX * pixelToMmRatio).toFixed(1);
             }
-        }
-
-        canvas.on({'object:scaling': (e) => updateData(e.target), 'object:moving': (e) => updateData(e.target)});
+        });
 
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
@@ -219,18 +237,6 @@
             };
             reader.readAsDataURL(e.target.files[0]);
         };
-
-        // 【修正】只清空繪圖物件，保留圖紙
-        function clearDrawings() {
-            const objects = canvas.getObjects();
-            for (let i = objects.length - 1; i >= 0; i--) {
-                if (objects[i].itemType !== 'bg') {
-                    canvas.remove(objects[i]);
-                }
-            }
-            document.getElementById('val-dist').innerText = "0";
-            document.getElementById('val-area').innerText = "0.00";
-        }
     </script>
 </body>
 </html>
