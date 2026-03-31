@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度旗艦版 v11</title>
+    <title>工程量度 App v12.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
         :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --lock: #f1c40f; }
@@ -11,18 +11,18 @@
         html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: #000; color: white; }
         body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
 
+        #version-tag { position: absolute; top: 5px; right: 10px; font-size: 10px; color: #666; z-index: 20; }
         #data-header { background: rgba(0,0,0,0.85); padding: 12px; display: flex; justify-content: space-around; z-index: 10; border-bottom: 1px solid #333; }
         .stat-val { color: var(--accent); font-weight: bold; font-family: monospace; font-size: 18px; }
 
         #canvas-wrapper { flex: 1; background: #111; position: relative; }
 
         #bottom-menu { background: var(--surface); padding: 10px 10px 35px 10px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
-        
-        #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); }
+        #calib-ui { display: none; background: #3d4654; padding: 10px; border-radius: 12px; align-items: center; gap: 8px; border: 1px solid var(--primary); margin-bottom: 5px; }
         #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 18px; text-align: center; }
         
         .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: 0.2s; }
+        .btn { background: #4b6584; color: white; border: none; border-radius: 12px; padding: 12px 2px; font-size: 11px; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .btn.active { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
         .btn-lock.active { background: var(--lock); color: black; }
         .btn-large { grid-column: span 2; flex-direction: row; justify-content: center; font-size: 14px; padding: 15px; }
@@ -32,6 +32,7 @@
 </head>
 <body>
 
+    <div id="version-tag">Ver 12.0</div>
     <div id="data-header">
         <div>長度: <span id="val-dist" class="stat-val">0</span> mm</div>
         <div>面積: <span id="val-area" class="stat-val">0.00</span> m²</div>
@@ -54,9 +55,8 @@
         </div>
 
         <div class="btn-row">
-            <button class="btn btn-large" style="background:#eb4d4b" onclick="clearCanvas()">🗑️ 清空</button>
-            <button class="btn" onclick="createRectRoom()"><span>🧱</span>矩形</button>
-            <button class="btn" style="background:var(--accent)" onclick="exportReport()">📋 導出</button>
+            <button class="btn btn-large" style="background:#eb4d4b" onclick="clearDrawings()">🗑️ 清空線條</button>
+            <button class="btn btn-large" onclick="createRectRoom()"><span>🧱</span>新增矩形</button>
         </div>
         <input type="file" id="file-input" accept="image/*">
     </div>
@@ -66,8 +66,7 @@
             width: window.innerWidth,
             height: window.innerHeight - 230,
             backgroundColor: '#111',
-            selection: false,
-            preserveObjectStacking: true
+            selection: false
         });
 
         let pixelToMmRatio = 1;
@@ -76,7 +75,7 @@
         let calibLine;
         let isLocked = false;
 
-        // --- 1. 手勢與移動控制（核心修復） ---
+        // --- 1. 手勢控制 (穩定版) ---
         let lastDist = 0;
         let isDragging = false;
         let lastPosX, lastPosY;
@@ -84,25 +83,17 @@
         function toggleLock() {
             isLocked = !isLocked;
             document.getElementById('lock-btn').classList.toggle('active', isLocked);
-            canvas.selection = false;
-            canvas.forEachObject(obj => {
-                if (obj.itemType !== 'calib') {
-                    obj.selectable = isLocked; // 只有鎖定後才能選中物件進行調整
-                }
-            });
-            alert(isLocked ? "圖紙已鎖定：現在可以精確拉線" : "圖紙已解鎖：現在可以移動/縮放畫布");
+            canvas.forEachObject(obj => { if(obj.itemType !== 'bg') obj.selectable = isLocked; });
+            canvas.requestRenderAll();
         }
 
         canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
                 lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-            } else if (e.touches.length === 1) {
-                const target = canvas.findTarget(e);
-                // 只有在未鎖定且沒點中物件，或是鎖定但沒點中物件時，才允許平移
-                if (!target && !isLocked) {
+            } else if (e.touches.length === 1 && !isLocked) {
+                if (!canvas.findTarget(e)) {
                     isDragging = true;
-                    lastPosX = e.touches[0].pageX;
-                    lastPosY = e.touches[0].pageY;
+                    lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
                 }
             }
         });
@@ -111,55 +102,55 @@
             if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                 const zoom = canvas.getZoom() * (dist / lastDist);
-                if (zoom > 0.1 && zoom < 20) {
+                if (zoom > 0.05 && zoom < 20) {
                     canvas.zoomToPoint({ x: (e.touches[0].pageX + e.touches[1].pageX)/2, y: (e.touches[0].pageY + e.touches[1].pageY)/2 - 50 }, zoom);
                 }
                 lastDist = dist;
-                e.preventDefault();
             } else if (isDragging && !isLocked) {
                 const vpt = canvas.viewportTransform;
                 vpt[4] += e.touches[0].pageX - lastPosX;
                 vpt[5] += e.touches[0].pageY - lastPosY;
                 canvas.requestRenderAll();
-                lastPosX = e.touches[0].pageX;
-                lastPosY = e.touches[0].pageY;
+                lastPosX = e.touches[0].pageX; lastPosY = e.touches[0].pageY;
             }
         });
-
         canvas.upperCanvasEl.addEventListener('touchend', () => { isDragging = false; });
 
-        // --- 2. 比例尺紅線：徹底鎖死粗細，純座標位移 ---
-        function createCalibLine(coords) {
-            const line = new fabric.Line(coords, {
-                stroke: '#ff7675', strokeWidth: 4, strokeUniform: true,
-                hasBorders: false, transparentCorners: true,
-                cornerSize: 50, cornerColor: 'transparent',
-                itemType: 'calib', selectable: true
+        // --- 2. 紅線核心重構：利用 Rect 模擬 Line 以獲得更好的觸控拉動 ---
+        function createSmartLine(width, color, type) {
+            const line = new fabric.Rect({
+                width: width,
+                height: 4, // 鎖死高度，保證唔會變粗
+                fill: color,
+                originY: 'center',
+                transparentCorners: true,
+                cornerSize: 45,
+                cornerColor: 'transparent',
+                hasBorders: false,
+                strokeUniform: true,
+                itemType: type
             });
-            // 手動綁定座標更新邏輯
-            line.controls.ml = new fabric.Control({ x: -0.5, y: 0, actionHandler: fabric.controlsUtils.changeLinePoint });
-            line.controls.mr = new fabric.Control({ x: 0.5, y: 0, actionHandler: fabric.controlsUtils.changeLinePoint });
-            line.setControlsVisibility({ bl:false, br:false, tl:false, tr:false, mtr:false, mt:false, mb:false });
+            // 淨係保留左右拉動掣
+            line.setControlsVisibility({ mt:false, mb:false, ml:true, mr:true, bl:false, br:false, tl:false, tr:false, mtr:false });
             return line;
         }
 
         function startCalibration() {
-            if(!isLocked) toggleLock(); // 自動進入鎖定模式方便操作
+            if(!isLocked) toggleLock();
             if(calibLine) canvas.remove(calibLine);
             document.getElementById('calib-ui').style.display = 'flex';
             document.getElementById('calib-btn').classList.add('active');
             const center = canvas.getVpCenter();
-            calibLine = createCalibLine([center.x-80, center.y, center.x+80, center.y]);
-            canvas.add(calibLine);
-            canvas.setActiveObject(calibLine);
+            calibLine = createSmartLine(200, '#ff7675', 'calib');
+            calibLine.set({ left: center.x - 100, top: center.y });
+            canvas.add(calibLine); canvas.setActiveObject(calibLine);
         }
 
         function confirmCalibration() {
             const mm = document.getElementById('input-mm').value;
-            const pxLen = Math.sqrt(Math.pow(calibLine.x2 - calibLine.x1, 2) + Math.pow(calibLine.y2 - calibLine.y1, 2));
+            const pxLen = calibLine.width * calibLine.scaleX;
             pixelToMmRatio = mm / pxLen;
             cancelCalibration();
-            alert("比例校準成功");
         }
 
         function cancelCalibration() {
@@ -169,23 +160,21 @@
             document.getElementById('calib-btn').classList.remove('active');
         }
 
-        // --- 3. 矩形與自由繪（保留原有功能並修復閉合） ---
+        // --- 3. 自由繪與清空邏輯 ---
         function createRectRoom() {
             if(!isLocked) toggleLock();
             const rect = new fabric.Rect({
-                left: 150, top: 150, width: 100, height: 100,
+                left: 100, top: 100, width: 100, height: 100,
                 fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2, strokeUniform: true,
                 transparentCorners: true, cornerSize: 40, cornerColor: 'transparent', itemType: 'room'
             });
-            canvas.add(rect);
-            canvas.setActiveObject(rect);
+            canvas.add(rect); canvas.setActiveObject(rect);
         }
 
         function togglePolyMode() {
             isPolyDrawing = !isPolyDrawing;
             document.getElementById('poly-btn').classList.toggle('active', isPolyDrawing);
             if(isPolyDrawing && !isLocked) toggleLock();
-            if(!isPolyDrawing) { pointArray.forEach(p => canvas.remove(p)); pointArray = []; }
         }
 
         canvas.on('mouse:down', (opt) => {
@@ -198,31 +187,25 @@
                 });
                 canvas.add(poly);
                 pointArray.forEach(p => canvas.remove(p)); pointArray = [];
-                isPolyDrawing = false;
-                document.getElementById('poly-btn').classList.remove('active');
+                isPolyDrawing = false; document.getElementById('poly-btn').classList.remove('active');
                 return;
             }
-            const dot = new fabric.Circle({
-                radius: 25, fill: pointArray.length === 0 ? '#00b894' : 'rgba(255,255,255,0.5)',
-                left: pointer.x, top: pointer.y, originX: 'center', originY: 'center',
-                selectable: true, id: pointArray.length === 0 ? 'firstPoint' : 'dot'
-            });
+            const dot = new fabric.Circle({ radius: 25, fill: pointArray.length === 0 ? '#00b894' : 'rgba(255,255,255,0.4)', left: pointer.x, top: pointer.y, originX: 'center', originY: 'center', id: pointArray.length === 0 ? 'firstPoint' : 'dot' });
             pointArray.push(dot); canvas.add(dot);
         });
 
-        // --- 數據同步 ---
+        // --- 數據與清空 ---
         function updateData(obj) {
             if(!obj) return;
-            if(obj.itemType === 'calib' || obj.type === 'line') {
-                const len = Math.sqrt(Math.pow(obj.x2 - obj.x1, 2) + Math.pow(obj.y2 - obj.y1, 2));
-                document.getElementById('val-dist').innerText = (len * pixelToMmRatio).toFixed(1);
+            if(obj.itemType === 'calib') {
+                document.getElementById('val-dist').innerText = (obj.width * obj.scaleX * pixelToMmRatio).toFixed(1);
             } else if(obj.itemType === 'room') {
                 const area = (obj.getScaledWidth() * pixelToMmRatio / 1000) * (obj.getScaledHeight() * pixelToMmRatio / 1000);
                 document.getElementById('val-area').innerText = Math.abs(area).toFixed(2);
             }
         }
 
-        canvas.on({'object:modified': (e) => updateData(e.target), 'object:moving': (e) => updateData(e.target), 'selection:created': (e) => updateData(e.selected[0])});
+        canvas.on({'object:scaling': (e) => updateData(e.target), 'object:moving': (e) => updateData(e.target)});
 
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
@@ -230,14 +213,24 @@
                 fabric.Image.fromURL(f.target.result, (img) => {
                     canvas.clear();
                     const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
+                    img.set({ itemType: 'bg', selectable: false });
                     canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), { scaleX: ratio, scaleY: ratio });
                 });
             };
             reader.readAsDataURL(e.target.files[0]);
         };
 
-        function clearCanvas() { canvas.clear(); canvas.setBackgroundColor('#111'); isLocked = false; document.getElementById('lock-btn').classList.remove('active'); }
-        function exportReport() { alert("長度: " + document.getElementById('val-dist').innerText + " mm\n面積: " + document.getElementById('val-area').innerText + " m²"); }
+        // 【修正】只清空繪圖物件，保留圖紙
+        function clearDrawings() {
+            const objects = canvas.getObjects();
+            for (let i = objects.length - 1; i >= 0; i--) {
+                if (objects[i].itemType !== 'bg') {
+                    canvas.remove(objects[i]);
+                }
+            }
+            document.getElementById('val-dist').innerText = "0";
+            document.getElementById('val-area').innerText = "0.00";
+        }
     </script>
 </body>
 </html>
