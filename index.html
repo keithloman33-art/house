@@ -3,121 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>工程量度 App Pro</title>
+    <title>工程量度 App v5.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
     <style>
-        :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; }
+        :root { --primary: #6c5ce7; --bg: #1e272e; --surface: #2f3542; --accent: #00b894; --danger: #eb4d4b; }
         
-        html, body { 
-            position: fixed; overflow: hidden; width: 100%; height: 100%;
-            font-family: -apple-system, system-ui, sans-serif; 
-            margin: 0; background: var(--bg); color: white; 
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        html, body { position: fixed; overflow: hidden; width: 100%; height: 100%; margin: 0; background: var(--bg); color: white; }
+        body { display: flex; flex-direction: column; font-family: -apple-system, system-ui, sans-serif; }
+
+        /* 頂部數據 */
+        #data-header {
+            background: rgba(0,0,0,0.5); padding: 10px; display: flex; justify-content: space-around;
+            border-bottom: 1px solid #444; font-size: 14px; z-index: 10;
+        }
+        .stat-val { color: var(--accent); font-weight: bold; font-family: monospace; font-size: 16px; }
+
+        /* 畫布 */
+        #canvas-wrapper { flex: 1; background: #111; position: relative; touch-action: none; }
+
+        /* 底部操作區 */
+        #bottom-menu {
+            background: var(--surface); padding: 10px 10px 30px 10px;
+            display: flex; flex-direction: column; gap: 10px;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.5); z-index: 100;
         }
 
-        body { display: flex; flex-direction: column; }
-
-        /* 數據與比例尺控制區 (移至頂部，避免遮擋中間繪圖區) */
-        #top-panel {
-            position: absolute; top: 45px; left: 10px; right: 10px;
-            z-index: 200; display: flex; flex-direction: column; gap: 8px;
+        /* 比例尺輸入行 - 固定喺掣上面 */
+        #calib-ui {
+            display: none; background: #3d4654; padding: 10px; border-radius: 10px;
+            align-items: center; gap: 8px; border: 1px solid var(--primary);
         }
+        #input-mm { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 16px; text-align: center; }
+        .confirm-btn { background: var(--accent); color: white; border: none; padding: 12px 15px; border-radius: 8px; font-weight: bold; }
 
-        #info-overlay {
-            background: rgba(47, 53, 66, 0.95); padding: 12px; border-radius: 12px;
-            display: flex; justify-content: space-around; backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1); pointer-events: none;
-        }
-        .stat-group { text-align: center; }
-        .stat-group span { display: block; font-size: 10px; color: #aaa; margin-bottom: 2px; }
-        .stat-val { font-weight: bold; font-size: 16px; color: #55efc4; font-family: monospace; }
-
-        /* 比例尺輸入框 - 放在數據欄下方 */
-        #calib-input-box {
-            background: var(--primary); padding: 10px 15px; border-radius: 12px;
-            display: none; box-shadow: 0 8px 20px rgba(0,0,0,0.5);
-            animation: slideDown 0.3s ease-out;
-        }
-        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        #calib-flex { display: flex; align-items: center; gap: 10px; }
-        #input-mm { 
-            flex: 1; padding: 10px; border-radius: 8px; border: none; 
-            font-size: 16px; text-align: center; background: white; color: black;
-        }
-        .confirm-btn { background: var(--accent); color: white; border: none; padding: 10px 15px; border-radius: 8px; font-weight: bold; }
-
-        /* 畫布區 */
-        #canvas-wrapper { flex: 1; background: #000; position: relative; touch-action: none; overflow: hidden; }
-
-        /* 底部操作面板 */
-        #controls-panel {
-            background: var(--surface); padding: 10px 10px 35px 10px;
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-            border-top: 1px solid #485460; z-index: 100;
-        }
-
+        /* 功能按鈕行 */
+        .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .btn {
-            background: #4b6584; color: white; border: none; border-radius: 12px;
-            font-size: 11px; padding: 12px 2px; font-weight: 600;
+            background: #4b6584; color: white; border: none; border-radius: 10px;
+            padding: 12px 2px; font-size: 11px; font-weight: 600;
             display: flex; flex-direction: column; align-items: center; gap: 4px;
         }
-        .btn:active { background: #3d5166; transform: scale(0.95); }
-        .btn.active { background: var(--primary); }
-        .action-row { grid-column: span 4; display: flex; gap: 8px; margin-top: 5px; }
-        .btn-full { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn.active { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+        .btn-large { grid-column: span 2; flex-direction: row; justify-content: center; font-size: 13px; padding: 15px; }
 
         #file-input { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="top-panel">
-        <div id="info-overlay">
-            <div class="stat-group"><span>外框尺寸 (m)</span><div id="val-dim" class="stat-val">--</div></div>
-            <div class="stat-group"><span>量度面積 (m²)</span><div id="val-area" class="stat-val">0.00</div></div>
-        </div>
-
-        <div id="calib-input-box">
-            <div id="calib-flex">
-                <input type="number" id="input-mm" pattern="[0-9]*" placeholder="輸入毫米(mm)" value="1000">
-                <button class="confirm-btn" onclick="confirmCalibration()">確認比例</button>
-                <button class="confirm-btn" style="background:#eb4d4b" onclick="cancelCalibration()">取消</button>
-            </div>
-            <div style="font-size:10px; margin-top:5px; text-align:center; opacity:0.9;">請拖動畫面上的紅線兩端對齊圖紙長度</div>
-        </div>
+    <div id="data-header">
+        <div>尺寸: <span id="val-dim" class="stat-val">--</span></div>
+        <div>面積: <span id="val-area" class="stat-val">0.00</span> m²</div>
     </div>
 
     <div id="canvas-wrapper">
         <canvas id="c"></canvas>
     </div>
 
-    <div id="controls-panel">
-        <button class="btn" onclick="document.getElementById('file-input').click()">
-            <span class="icon">🖼️</span>圖紙
-        </button>
-        <button id="calib-btn" class="btn" onclick="startCalibration()">
-            <span class="icon">📏</span>比例
-        </button>
-        <button class="btn" onclick="createRectRoom()">
-            <span class="icon">🧱</span>矩形
-        </button>
-        <button id="poly-btn" class="btn" onclick="togglePolyMode()">
-            <span class="icon">🖊️</span>自由繪
-        </button>
-        
-        <div class="action-row">
-            <button class="btn-full" style="background:#eb4d4b" onclick="clearCanvas()">🗑️ 清空</button>
-            <button class="btn-full" style="background:#20bf6b" onclick="exportReport()">📋 導出</button>
+    <div id="bottom-menu">
+        <div id="calib-ui">
+            <input type="number" id="input-mm" pattern="[0-9]*" placeholder="輸入長度 (mm)" value="1000">
+            <button class="confirm-btn" onclick="confirmCalibration()">OK</button>
+            <button class="confirm-btn" style="background:#666" onclick="cancelCalibration()">取消</button>
         </div>
-        
+
+        <div class="btn-row">
+            <button class="btn" onclick="document.getElementById('file-input').click()"><span>🖼️</span>圖紙</button>
+            <button id="calib-btn" class="btn" onclick="startCalibration()"><span>📏</span>比例</button>
+            <button id="rect-btn" class="btn" onclick="createRectRoom()"><span>🧱</span>矩形</button>
+            <button id="poly-btn" class="btn" onclick="togglePolyMode()"><span>🖊️</span>自由繪</button>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-large" style="background:var(--danger)" onclick="clearCanvas()">🗑️ 清空</button>
+            <button class="btn btn-large" style="background:var(--accent)" onclick="exportReport()">📋 導出</button>
+        </div>
         <input type="file" id="file-input" accept="image/*">
     </div>
 
     <script>
-        const wrapper = document.getElementById('canvas-wrapper');
         const canvas = new fabric.Canvas('c', {
             width: window.innerWidth,
-            height: wrapper.clientHeight,
+            height: window.innerHeight - document.getElementById('bottom-menu').offsetHeight - 50,
             backgroundColor: '#111',
             selection: true,
             preserveObjectStacking: true
@@ -128,35 +96,32 @@
         let pointArray = [];
         let calibLine;
 
-        // --- 優化後的比例尺邏輯 ---
+        // --- 1. 比例尺邏輯 (底部輸入) ---
         function startCalibration() {
             if(calibLine) canvas.remove(calibLine);
-            // 紅線生成在畫布中間稍微靠下，避免一開始就被頂部框遮住
-            const centerY = canvas.getHeight() / 2;
-            calibLine = new fabric.Line([50, centerY, 250, centerY], {
+            document.getElementById('calib-ui').style.display = 'flex';
+            document.getElementById('calib-btn').classList.add('active');
+            
+            calibLine = new fabric.Line([50, 200, 250, 200], {
                 stroke: '#ff7675', strokeWidth: 8, 
                 hasControls: true, 
-                cornerStyle: 'circle',
-                cornerSize: 35, // 巨大的觸控點，但對齊後會消失
-                transparentCorners: true, 
-                cornerColor: 'rgba(255, 118, 117, 0.7)',
+                cornerStyle: 'circle', cornerSize: 40, // 超大觸控點
+                transparentCorners: true, cornerColor: 'rgba(255,118,117,0.5)',
                 borderColor: 'white'
             });
             canvas.add(calibLine);
             canvas.setActiveObject(calibLine);
-            document.getElementById('calib-input-box').style.display = 'block';
-            document.getElementById('calib-btn').classList.add('active');
         }
 
         function cancelCalibration() {
             if(calibLine) canvas.remove(calibLine);
-            document.getElementById('calib-input-box').style.display = 'none';
+            document.getElementById('calib-ui').style.display = 'none';
             document.getElementById('calib-btn').classList.remove('active');
         }
 
         function confirmCalibration() {
             const mm = document.getElementById('input-mm').value;
-            if(!mm || mm <= 0) return alert("請輸入長度");
+            if(!mm || mm <= 0) return alert("請輸入 mm");
             const pxLen = Math.sqrt(
                 Math.pow((calibLine.x2 - calibLine.x1) * calibLine.scaleX, 2) + 
                 Math.pow((calibLine.y2 - calibLine.y1) * calibLine.scaleY, 2)
@@ -164,46 +129,30 @@
             pixelToMmRatio = parseFloat(mm) / pxLen;
             canvas.remove(calibLine);
             calibLine = null;
-            document.getElementById('calib-input-box').style.display = 'none';
+            document.getElementById('calib-ui').style.display = 'none';
             document.getElementById('calib-btn').classList.remove('active');
-            alert("比例設定成功！");
-            refreshAll();
+            alert("比例已校準！");
         }
 
-        // --- 繪圖功能優化 ---
-        function setupRoom(obj) {
-            obj.set({
-                fill: 'rgba(108, 92, 231, 0.3)', 
-                stroke: '#6c5ce7', 
-                strokeWidth: 2,
-                itemType: 'room',
-                // 手機版優化控制點：改細、圓形、半透明
-                cornerStyle: 'circle',
-                cornerSize: 20, 
-                transparentCorners: true,
-                cornerColor: 'rgba(108, 92, 231, 0.5)',
-                borderColor: '#6c5ce7'
-            });
-            canvas.add(obj);
-            canvas.setActiveObject(obj);
-            updateInfo(obj);
-        }
-
-        function createRectRoom() {
-            const rect = new fabric.Rect({ left: 100, top: 200, width: 120, height: 100 });
-            setupRoom(rect);
-        }
-
+        // --- 2. 自由繪 (修復版) ---
         function togglePolyMode() {
             isPolyDrawing = !isPolyDrawing;
             document.getElementById('poly-btn').classList.toggle('active', isPolyDrawing);
             canvas.selection = !isPolyDrawing;
-            if(!isPolyDrawing) { pointArray.forEach(p => canvas.remove(p)); pointArray = []; }
+            
+            if(!isPolyDrawing) {
+                pointArray.forEach(p => canvas.remove(p));
+                pointArray = [];
+            } else {
+                alert("自由繪模式：點擊畫面畫點，點擊第一個綠點完成閉合。");
+            }
         }
 
         canvas.on('mouse:down', (opt) => {
             if (!isPolyDrawing) return;
             const pointer = canvas.getPointer(opt.e);
+            
+            // 點擊第一個點 (綠色) 閉合
             if (pointArray.length > 2 && opt.target && opt.target.id === pointArray[0].id) {
                 const poly = new fabric.Polygon(pointArray.map(p => ({ x: p.left, y: p.top })));
                 setupRoom(poly);
@@ -213,11 +162,40 @@
                 document.getElementById('poly-btn').classList.remove('active');
                 return;
             }
-            const dot = new fabric.Circle({ radius: 18, fill: 'rgba(0, 184, 148, 0.6)', left: pointer.x, top: pointer.y, originX: 'center', originY: 'center', selectable: false, id: 'p'+Date.now() });
-            pointArray.push(dot); canvas.add(dot);
+
+            const isFirst = pointArray.length === 0;
+            const dot = new fabric.Circle({
+                radius: 20, // 加大觸控點
+                fill: isFirst ? '#00b894' : 'rgba(108, 92, 231, 0.5)',
+                left: pointer.x, top: pointer.y,
+                originX: 'center', originY: 'center',
+                selectable: isFirst, // 只有第一個點可以被選中（用嚟點擊閉合）
+                id: isFirst ? 'firstPoint' : 'dot' + Date.now()
+            });
+            
+            pointArray.push(dot);
+            canvas.add(dot);
+            if(isFirst) dot.bringToFront();
         });
 
-        // --- 數據同步 ---
+        // --- 3. 繪圖設定 ---
+        function setupRoom(obj) {
+            obj.set({
+                fill: 'rgba(108, 92, 231, 0.3)', stroke: '#6c5ce7', strokeWidth: 2,
+                itemType: 'room',
+                cornerStyle: 'circle', cornerSize: 25, 
+                transparentCorners: true, cornerColor: 'rgba(108,92,231,0.4)'
+            });
+            canvas.add(obj);
+            canvas.setActiveObject(obj);
+            updateInfo(obj);
+        }
+
+        function createRectRoom() {
+            const rect = new fabric.Rect({ left: 100, top: 100, width: 120, height: 100 });
+            setupRoom(rect);
+        }
+
         function updateInfo(obj) {
             if (!obj || obj.itemType !== 'room') return;
             const w = (obj.width * obj.scaleX * pixelToMmRatio / 1000).toFixed(2);
@@ -238,14 +216,13 @@
             document.getElementById('val-area').innerText = area.toFixed(2);
         }
 
+        // --- 監聽 ---
         canvas.on({
             'object:scaling': (e) => updateInfo(e.target),
             'object:moving': (e) => updateInfo(e.target),
-            'selection:created': (e) => updateInfo(e.selected[0]),
-            'selection:updated': (e) => updateInfo(e.selected[0])
+            'selection:created': (e) => updateInfo(e.selected[0])
         });
 
-        // --- 圖紙處理 ---
         document.getElementById('file-input').onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (f) => {
@@ -257,11 +234,13 @@
             reader.readAsDataURL(e.target.files[0]);
         };
 
-        function clearCanvas() { if(confirm("確定要清空嗎？")) { canvas.clear(); canvas.setBackgroundColor('#111'); } }
-        function refreshAll() { canvas.getObjects().forEach(o => updateInfo(o)); }
-        function exportReport() { alert("目前選取區域面積：" + document.getElementById('val-area').innerText + " m²"); }
-
-        window.onresize = () => { canvas.setDimensions({ width: window.innerWidth, height: wrapper.clientHeight }); };
+        function clearCanvas() { if(confirm("確定清空？")) { canvas.clear(); canvas.setBackgroundColor('#111'); } }
+        function exportReport() { alert("面積：" + document.getElementById('val-area').innerText + " m²"); }
+        
+        // 自動適配螢幕
+        window.addEventListener('resize', () => {
+            canvas.setDimensions({ width: window.innerWidth, height: window.innerHeight - document.getElementById('bottom-menu').offsetHeight - 50 });
+        });
     </script>
 </body>
 </html>
